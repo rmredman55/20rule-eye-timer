@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>20/20/20 Eye Strain Timer</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --work-color: #3b82f6;
+            --break-color: #10b981;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            margin: 0 0 0.5rem 0;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+        }
+
+        .timer-circle {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            margin: 0 auto 2rem auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            border: 8px solid #334155;
+            transition: border-color 0.5s ease;
+        }
+
+        .timer-circle.work-mode {
+            border-color: var(--work-color);
+        }
+
+        .timer-circle.break-mode {
+            border-color: var(--break-color);
+        }
+
+        .time-display {
+            font-size: 3.5rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .mode-status {
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            margin-top: 0.25rem;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            width: 120px;
+        }
+
+        .btn-secondary {
+            background-color: #334155;
+            color: var(--text-main);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>20/20/20 Timer</h1>
+        <div class="subtitle">Protect your eyes from digital strain</div>
+
+        <div id="timerCircle" class="timer-circle work-mode">
+            <div id="timeDisplay" class="time-display">20:00</div>
+            <div id="modeStatus" class="mode-status" style="color: var(--work-color);">Focus</div>
+        </div>
+
+        <div class="btn-group">
+            <button id="startBtn" class="btn-primary" onclick="toggleTimer()">Start</button>
+            <button id="resetBtn" class="btn-secondary" onclick="resetTimer()">Reset</button>
+            <button id="testAudioBtn" class="btn-secondary" onclick="playTestSound()">🎵 Test Sound</button>
+        </div>
+    </div>
+
+    <script>
+        // Set standard 20/20/20 rule parameters
+        const WORK_TIME = 20 * 60; // 20 minutes in seconds
+        const BREAK_TIME = 20;     // 20 seconds
+        
+        let timeLeft = WORK_TIME;
+        let isBreak = false;
+        let isRunning = false;
+        let timerId = null;
+
+        // Web Audio API context for generating native notification sounds without needing external files
+        let audioCtx = null;
+
+        const timeDisplay = document.getElementById('timeDisplay');
+        const modeStatus = document.getElementById('modeStatus');
+        const timerCircle = document.getElementById('timerCircle');
+        const startBtn = document.getElementById('startBtn');
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playNotificationSound(isBreakStart) {
+            initAudio();
+            if (!audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            // Double high beep for break time, low standard chime for work return
+            if (isBreakStart) {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+                osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            } else {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5 note
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            }
+        }
+
+        function playTestSound() {
+            initAudio();
+            playNotificationSound(true);
+        }
+
+        function updateDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timeDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            
+            // Sync page title so coworkers can see time remaining in browser tabs
+            const statusLabel = isBreak ? "BREAK!" : "Focus";
+            document.title = `(${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}) ${statusLabel}`;
+        }
+
+        function toggleTimer() {
+            initAudio();
+            if (isRunning) {
+                clearInterval(timerId);
+                isRunning = false;
+                startBtn.textContent = 'Resume';
+                startBtn.style.backgroundColor = '#f1f5f9';
+            } else {
+                isRunning = true;
+                startBtn.textContent = 'Pause';
+                startBtn.style.backgroundColor = '#f43f5e'; // red stop accent
+                startBtn.style.color = '#fff';
+                
+                timerId = setInterval(() => {
+                    timeLeft--;
+
+                    if (timeLeft < 0) {
+                        isBreak = !isBreak;
+                        if (isBreak) {
+                            timeLeft = BREAK_TIME;
+                            modeStatus.textContent = 'Look Away!';
+                            modeStatus.style.color = 'var(--break-color)';
+                            timerCircle.className = 'timer-circle break-mode';
+                            playNotificationSound(true);
+                        } else {
+                            timeLeft = WORK_TIME;
+                            modeStatus.textContent = 'Focus';
+                            modeStatus.style.color = 'var(--work-color)';
+                            timerCircle.className = 'timer-circle work-mode';
+                            playNotificationSound(false);
+                        }
+                    }
+                    updateDisplay();
+                }, 1000);
+            }
+        }
+
+        function resetTimer() {
+            clearInterval(timerId);
+            isRunning = false;
+            isBreak = false;
+            timeLeft = WORK_TIME;
+            
+            modeStatus.textContent = 'Focus';
+            modeStatus.style.color = 'var(--work-color)';
+            timerCircle.className = 'timer-circle work-mode';
+            startBtn.textContent = 'Start';
+            startBtn.style.backgroundColor = '#f1f5f9';
+            startBtn.style.color = '#0f172a';
+            document.title = "20/20/20 Eye Strain Timer";
+            
+            updateDisplay();
+        }
+    </script>
+</body>
+</html>
