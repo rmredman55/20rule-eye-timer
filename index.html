@@ -171,7 +171,6 @@
     </div>
 
     <script>
-        // Force Javascript execution to look for button targets ONLY after browser confirms DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
             const WORK_TIME = 20 * 60; 
             const BREAK_TIME = 20;     
@@ -240,7 +239,6 @@
                 playNotificationSound(true);
             }
 
-            // Moved updates inside listener scope to consistently sync display changes
             function updateDisplay() {
                 const minutes = Math.floor(timeLeft / 60);
                 const seconds = timeLeft % 60;
@@ -292,5 +290,8 @@
                                 timeLeft = WORK_TIME;
                                 modeStatus.textContent = 'Ready to focus?';
                                 modeStatus.style.color = 'var(--work-color)';
+                                timerCircle.className = 'timer-circle work-mode';
+                                playNotificationSound(false);
+                                updateDisplay();
 								
 								timerCircle.className = 'timer-circle work-mode';playNotificationSound(false);updateDisplay();pauseTimerUI('Resume Focus');}} else {if (isBreak) {modeStatus.textContent = 'Look Away!';} else {modeStatus.textContent = 'Focus';}updateDisplay();}}, 1000);}}function resetTimer() {clearInterval(timerId);isRunning = false;isBreak = false;timeLeft = WORK_TIME;startBtn.textContent = 'Start';startBtn.style.backgroundColor = '#f1f5f9';startBtn.style.color = '#0f172a';modeStatus.textContent = 'Focus';modeStatus.style.color = 'var(--work-color)';timerCircle.className = 'timer-circle work-mode';updateDisplay();}async function togglePipWindow() {if (pipWindow) {pipWindow.close();return;}try {pipWindow = await window.documentPictureInPicture.requestWindow({width: 380,height: 480});const mainStyles = document.getElementById('mainStyles').cloneNode(true);pipWindow.document.head.append(mainStyles);const styleOverride = pipWindow.document.createElement('style');styleOverride.textContent = body { min-height: 100vh; background: #0f172a; padding: 10px; box-sizing: border-box; } .container { box-shadow: none; max-width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; };pipWindow.document.head.append(styleOverride);pipWindow.document.body.append(appContainer);pipBtn.textContent = "↩️ Return to Tab";pipWindow.addEventListener('unload', () => {pipWindow = null;document.body.append(appContainer);pipBtn.textContent = "📺 Pop Out Window";});updateDisplay();} catch (err) {console.error("Failed to establish Floating Window:", err);}}// Safe contextual initialization bindingsstartBtn.addEventListener('click', toggleTimer);resetBtn.addEventListener('click', resetTimer);testAudioBtn.addEventListener('click', playTestSound);pipBtn.addEventListener('click', togglePipWindow);});
