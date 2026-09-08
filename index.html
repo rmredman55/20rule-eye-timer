@@ -105,7 +105,7 @@
         .btn-primary {
             background-color: #f1f5f9;
             color: #0f172a;
-            width: 120px;
+            width: 140px;
         }
 
         .btn-secondary {
@@ -138,16 +138,13 @@
     </div>
 
     <script>
-        // Set standard 20/20/20 rule parameters
-        const WORK_TIME = 20 * 60; // 20 minutes in seconds
-        const BREAK_TIME = 20;     // 20 seconds
+        const WORK_TIME = 20 * 60; 
+        const BREAK_TIME = 20;     
         
         let timeLeft = WORK_TIME;
         let isBreak = false;
         let isRunning = false;
         let timerId = null;
-
-        // Web Audio API context for generating native notification sounds without needing external files
         let audioCtx = null;
 
         const timeDisplay = document.getElementById('timeDisplay');
@@ -165,28 +162,33 @@
             initAudio();
             if (!audioCtx) return;
 
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
+            // Helper function to create a beefier, multi-layered oscillator sound
+            function createTone(freq, type, duration, delay = 0) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                // Significantly bumped gain up to 0.6 for maximum audible presence without distortion
+                gain.gain.setValueAtTime(0.6, audioCtx.currentTime + delay);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
+                
+                osc.start(audioCtx.currentTime + delay);
+                osc.stop(audioCtx.currentTime + delay + duration);
+            }
 
-            // Double high beep for break time, low standard chime for work return
             if (isBreakStart) {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-                osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.4);
+                // Energetic bright dual-tone chime for breaking away
+                createTone(880, 'sine', 0.5);
+                createTone(1320, 'sine', 0.5, 0.08); 
             } else {
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5 note
-                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.5);
+                // Deep, clear chime for returning to work
+                createTone(523.25, 'triangle', 0.6);
+                createTone(659.25, 'sine', 0.6, 0.05);
             }
         }
 
@@ -200,22 +202,26 @@
             const seconds = timeLeft % 60;
             timeDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
             
-            // Sync page title so coworkers can see time remaining in browser tabs
             const statusLabel = isBreak ? "BREAK!" : "Focus";
             document.title = `(${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}) ${statusLabel}`;
+        }
+
+        function pauseTimerUI(nextLabel) {
+            clearInterval(timerId);
+            isRunning = false;
+            startBtn.textContent = nextLabel;
+            startBtn.style.backgroundColor = '#f1f5f9';
+            startBtn.style.color = '#0f172a';
         }
 
         function toggleTimer() {
             initAudio();
             if (isRunning) {
-                clearInterval(timerId);
-                isRunning = false;
-                startBtn.textContent = 'Resume';
-                startBtn.style.backgroundColor = '#f1f5f9';
+                pauseTimerUI(isBreak ? 'Start Break' : 'Resume');
             } else {
                 isRunning = true;
                 startBtn.textContent = 'Pause';
-                startBtn.style.backgroundColor = '#f43f5e'; // red stop accent
+                startBtn.style.backgroundColor = '#f43f5e'; 
                 startBtn.style.color = '#fff';
                 
                 timerId = setInterval(() => {
@@ -225,19 +231,30 @@
                         isBreak = !isBreak;
                         if (isBreak) {
                             timeLeft = BREAK_TIME;
-                            modeStatus.textContent = 'Look Away!';
+                            modeStatus.textContent = 'Ready for break?';
                             modeStatus.style.color = 'var(--break-color)';
                             timerCircle.className = 'timer-circle break-mode';
                             playNotificationSound(true);
+                            updateDisplay();
+                            pauseTimerUI('Start Break');
                         } else {
                             timeLeft = WORK_TIME;
-                            modeStatus.textContent = 'Focus';
+                            modeStatus.textContent = 'Ready to focus?';
                             modeStatus.style.color = 'var(--work-color)';
                             timerCircle.className = 'timer-circle work-mode';
                             playNotificationSound(false);
+                            updateDisplay();
+                            pauseTimerUI('Resume Focus');
                         }
+                    } else {
+                        // Regular label updates during active countdowns
+                        if (isBreak) {
+                            modeStatus.textContent = 'Look Away!';
+                        } else {
+                            modeStatus.textContent = 'Focus';
+                        }
+                        updateDisplay();
                     }
-                    updateDisplay();
                 }, 1000);
             }
         }
@@ -247,17 +264,16 @@
             isRunning = false;
             isBreak = false;
             timeLeft = WORK_TIME;
-            
-            modeStatus.textContent = 'Focus';
-            modeStatus.style.color = 'var(--work-color)';
-            timerCircle.className = 'timer-circle work-mode';
             startBtn.textContent = 'Start';
             startBtn.style.backgroundColor = '#f1f5f9';
             startBtn.style.color = '#0f172a';
-            document.title = "20/20/20 Eye Strain Timer";
-            
+            modeStatus.textContent = 'Focus';
+            modeStatus.style.color = 'var(--work-color)';
+            timerCircle.className = 'timer-circle work-mode';
             updateDisplay();
         }
     </script>
+</body>
+</html>
 </body>
 </html>
