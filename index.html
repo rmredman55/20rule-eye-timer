@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>20/20/20 Eye Strain Timer</title>
-    <style id="mainStyles">
+    <style>
         :root {
             --bg-color: #0f172a;
             --card-bg: #1e293b;
@@ -104,7 +104,6 @@
             gap: 0.75rem;
             justify-content: center;
             flex-wrap: wrap;
-            margin-bottom: 0.75rem;
         }
 
         button {
@@ -132,12 +131,6 @@
             color: var(--text-main);
         }
 
-        .btn-pip {
-            background-color: #475569;
-            color: #fff;
-            width: 100%;
-        }
-
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -146,7 +139,7 @@
 </head>
 <body>
 
-    <div id="appContainer" class="container">
+    <div class="container">
         <h1>20/20/20 Timer</h1>
         <div class="subtitle">Protect your eyes from digital strain</div>
 
@@ -162,136 +155,147 @@
         </div>
 
         <div class="btn-group">
-            <button id="startBtn" class="btn-primary">Start</button>
-            <button id="resetBtn" class="btn-secondary">Reset</button>
-            <button id="testAudioBtn" class="btn-secondary">🎵 Test</button>
+            <button id="startBtn" class="btn-primary" onclick="toggleTimer()">Start</button>
+            <button id="resetBtn" class="btn-secondary" onclick="resetTimer()">Reset</button>
+            <button id="testAudioBtn" class="btn-secondary" onclick="playTestSound()">🎵 Test</button>
         </div>
-        
-        <button id="pipBtn" class="btn-pip">📺 Pop Out Window</button>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const WORK_TIME = 20 * 60; 
-            const BREAK_TIME = 20;     
+        const WORK_TIME = 20 * 60; 
+        const BREAK_TIME = 20;     
+        
+        let timeLeft = WORK_TIME;
+        let isBreak = false;
+        let isRunning = false;
+        let timerId = null;
+        let audioCtx = null;
+
+        const timeDisplay = document.getElementById('timeDisplay');
+        const modeStatus = document.getElementById('modeStatus');
+        const timerCircle = document.getElementById('timerCircle');
+        const startBtn = document.getElementById('startBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playNotificationSound(isBreakStart) {
+            initAudio();
+            if (!audioCtx) return;
+
+            const volumeLevel = parseFloat(volumeSlider.value);
+
+            function createTone(freq, type, duration, delay = 0) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                gain.gain.setValueAtTime(volumeLevel, audioCtx.currentTime + delay);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
+                
+                osc.start(audioCtx.currentTime + delay);
+                osc.stop(audioCtx.currentTime + delay + duration);
+            }
+
+            if (isBreakStart) {
+                createTone(880, 'sine', 0.5);
+                createTone(1320, 'sine', 0.5, 0.08); 
+            } else {
+                createTone(523.25, 'triangle', 0.6);
+                createTone(659.25, 'sine', 0.6, 0.05);
+            }
+        }
+
+        function playTestSound() {
+            initAudio();
+            playNotificationSound(true);
+        }
+
+        function updateDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            const timeString = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
             
-            let timeLeft = WORK_TIME;
-            let isBreak = false;
-            let isRunning = false;
-            let timerId = null;
-            let audioCtx = null;
-            let pipWindow = null;
+            timeDisplay.textContent = timeString;
+            
+            const statusLabel = isBreak ? "BREAK!" : "Focus";
+            document.title = `(${timeString}) ${statusLabel}`;
+        }
 
-            const timeDisplay = document.getElementById('timeDisplay');
-            const modeStatus = document.getElementById('modeStatus');
-            const timerCircle = document.getElementById('timerCircle');
-            const startBtn = document.getElementById('startBtn');
-            const resetBtn = document.getElementById('resetBtn');
-            const testAudioBtn = document.getElementById('testAudioBtn');
-            const volumeSlider = document.getElementById('volumeSlider');
-            const pipBtn = document.getElementById('pipBtn');
-            const appContainer = document.getElementById('appContainer');
+        function pauseTimerUI(nextLabel) {
+            clearInterval(timerId);
+            isRunning = false;
+            startBtn.textContent = nextLabel;
+            startBtn.style.backgroundColor = '#f1f5f9';
+            startBtn.style.color = '#0f172a';
+        }
 
-            if (!('documentPictureInPicture' in window)) {
-                pipBtn.style.display = 'none';
-            }
-
-            function initAudio() {
-                if (!audioCtx) {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                }
-            }
-
-            function playNotificationSound(isBreakStart) {
-                initAudio();
-                if (!audioCtx) return;
-
-                const volumeLevel = parseFloat(volumeSlider.value);
-
-                function createTone(freq, type, duration, delay = 0) {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    
-                    osc.type = type;
-                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
-                    
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    
-                    gain.gain.setValueAtTime(volumeLevel, audioCtx.currentTime + delay);
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
-                    
-                    osc.start(audioCtx.currentTime + delay);
-                    osc.stop(audioCtx.currentTime + delay + duration);
-                }
-
-                if (isBreakStart) {
-                    createTone(880, 'sine', 0.5);
-                    createTone(1320, 'sine', 0.5, 0.08); 
-                } else {
-                    createTone(523.25, 'triangle', 0.6);
-                    createTone(659.25, 'sine', 0.6, 0.05);
-                }
-            }
-
-            function playTestSound() {
-                initAudio();
-                playNotificationSound(true);
-            }
-
-            function updateDisplay() {
-                const minutes = Math.floor(timeLeft / 60);
-                const seconds = timeLeft % 60;
-                const timeString = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        function toggleTimer() {
+            initAudio();
+            if (isRunning) {
+                pauseTimerUI(isBreak ? 'Start Break' : 'Resume');
+            } else {
+                isRunning = true;
+                startBtn.textContent = 'Pause';
+                startBtn.style.backgroundColor = '#f43f5e'; 
+                startBtn.style.color = '#fff';
                 
-                timeDisplay.textContent = timeString;
-                
-                const statusLabel = isBreak ? "BREAK!" : "Focus";
-                const fullTitle = `(${timeString}) ${statusLabel}`;
-                
-                document.title = fullTitle;
-                if (pipWindow) {
-                    pipWindow.document.title = fullTitle;
-                }
+                timerId = setInterval(() => {
+                    timeLeft--;
+
+                    if (timeLeft < 0) {
+                        isBreak = !isBreak;
+                        if (isBreak) {
+                            timeLeft = BREAK_TIME;
+                            modeStatus.textContent = 'Ready for break?';
+                            modeStatus.style.color = 'var(--break-color)';
+                            timerCircle.className = 'timer-circle break-mode';
+                            playNotificationSound(true);
+                            updateDisplay();
+                            pauseTimerUI('Start Break');
+                        } else {
+                            timeLeft = WORK_TIME;
+                            modeStatus.textContent = 'Ready to focus?';
+                            modeStatus.style.color = 'var(--work-color)';
+                            timerCircle.className = 'timer-circle work-mode';
+                            playNotificationSound(false);
+                            updateDisplay();
+                            pauseTimerUI('Resume Focus');
+                        }
+                    } else {
+                        if (isBreak) {
+                            modeStatus.textContent = 'Look Away!';
+                        } else {
+                            modeStatus.textContent = 'Focus';
+                        }
+                        updateDisplay();
+                    }
+                }, 1000);
             }
+        }
 
-            function pauseTimerUI(nextLabel) {
-                clearInterval(timerId);
-                isRunning = false;
-                startBtn.textContent = nextLabel;
-                startBtn.style.backgroundColor = '#f1f5f9';
-                startBtn.style.color = '#0f172a';
-            }
-
-            function toggleTimer() {
-                initAudio();
-                if (isRunning) {
-                    pauseTimerUI(isBreak ? 'Start Break' : 'Resume');
-                } else {
-                    isRunning = true;
-                    startBtn.textContent = 'Pause';
-                    startBtn.style.backgroundColor = '#f43f5e'; 
-                    startBtn.style.color = '#fff';
-                    
-                    timerId = setInterval(() => {
-                        timeLeft--;
-
-                        if (timeLeft < 0) {
-                            isBreak = !isBreak;
-                            if (isBreak) {
-                                timeLeft = BREAK_TIME;
-                                modeStatus.textContent = 'Ready for break?';
-                                modeStatus.style.color = 'var(--break-color)';
-                                timerCircle.className = 'timer-circle break-mode';
-                                playNotificationSound(true);
-                                updateDisplay();
-                                pauseTimerUI('Start Break');
-                            } else {
-                                timeLeft = WORK_TIME;
-                                modeStatus.textContent = 'Ready to focus?';
-                                modeStatus.style.color = 'var(--work-color)';
-                                timerCircle.className = 'timer-circle work-mode';
-                                playNotificationSound(false);
-                                updateDisplay();
-								
-								timerCircle.className = 'timer-circle work-mode';playNotificationSound(false);updateDisplay();pauseTimerUI('Resume Focus');}} else {if (isBreak) {modeStatus.textContent = 'Look Away!';} else {modeStatus.textContent = 'Focus';}updateDisplay();}}, 1000);}}function resetTimer() {clearInterval(timerId);isRunning = false;isBreak = false;timeLeft = WORK_TIME;startBtn.textContent = 'Start';startBtn.style.backgroundColor = '#f1f5f9';startBtn.style.color = '#0f172a';modeStatus.textContent = 'Focus';modeStatus.style.color = 'var(--work-color)';timerCircle.className = 'timer-circle work-mode';updateDisplay();}async function togglePipWindow() {if (pipWindow) {pipWindow.close();return;}try {pipWindow = await window.documentPictureInPicture.requestWindow({width: 380,height: 480});const mainStyles = document.getElementById('mainStyles').cloneNode(true);pipWindow.document.head.append(mainStyles);const styleOverride = pipWindow.document.createElement('style');styleOverride.textContent = body { min-height: 100vh; background: #0f172a; padding: 10px; box-sizing: border-box; } .container { box-shadow: none; max-width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; };pipWindow.document.head.append(styleOverride);pipWindow.document.body.append(appContainer);pipBtn.textContent = "↩️ Return to Tab";pipWindow.addEventListener('unload', () => {pipWindow = null;document.body.append(appContainer);pipBtn.textContent = "📺 Pop Out Window";});updateDisplay();} catch (err) {console.error("Failed to establish Floating Window:", err);}}// Safe contextual initialization bindingsstartBtn.addEventListener('click', toggleTimer);resetBtn.addEventListener('click', resetTimer);testAudioBtn.addEventListener('click', playTestSound);pipBtn.addEventListener('click', togglePipWindow);});
+        function resetTimer() {
+            clearInterval(timerId);
+            isRunning = false;
+            isBreak = false;
+            timeLeft = WORK_TIME;
+            startBtn.textContent = 'Start';
+            startBtn.style.backgroundColor = '#f1f5f9';
+            startBtn.style.color = '#0f172a';
+            modeStatus.textContent = 'Focus';
+            modeStatus.style.color = 'var(--work-color)';
+            timerCircle.className = 'timer-circle work-mode';
+            updateDisplay();
+        }
+    </script>
+</body>
+</html>
