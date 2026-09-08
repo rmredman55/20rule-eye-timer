@@ -83,7 +83,6 @@
             margin-top: 0.25rem;
         }
 
-        /* Volume controls styling */
         .volume-container {
             display: flex;
             align-items: center;
@@ -147,7 +146,6 @@
 </head>
 <body>
 
-    <!-- Target wrapper container to allow moving it between main window and floating PiP window -->
     <div id="appContainer" class="container">
         <h1>20/20/20 Timer</h1>
         <div class="subtitle">Protect your eyes from digital strain</div>
@@ -157,7 +155,6 @@
             <div id="modeStatus" class="mode-status" style="color: var(--work-color);">Focus</div>
         </div>
 
-        <!-- Volume Control Slider Component -->
         <div class="volume-container">
             <span>🔈</span>
             <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.05" value="0.6">
@@ -165,12 +162,12 @@
         </div>
 
         <div class="btn-group">
-            <button id="startBtn" class="btn-primary" onclick="toggleTimer()">Start</button>
-            <button id="resetBtn" class="btn-secondary" onclick="resetTimer()">Reset</button>
-            <button id="testAudioBtn" class="btn-secondary" onclick="playTestSound()">🎵 Test</button>
+            <button id="startBtn" class="btn-primary">Start</button>
+            <button id="resetBtn" class="btn-secondary">Reset</button>
+            <button id="testAudioBtn" class="btn-secondary">🎵 Test</button>
         </div>
         
-        <button id="pipBtn" class="btn-pip" onclick="togglePipWindow()">📺 Pop Out Window</button>
+        <button id="pipBtn" class="btn-pip">📺 Pop Out Window</button>
     </div>
 
     <script>
@@ -188,6 +185,8 @@
         const modeStatus = document.getElementById('modeStatus');
         const timerCircle = document.getElementById('timerCircle');
         const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const testAudioBtn = document.getElementById('testAudioBtn');
         const volumeSlider = document.getElementById('volumeSlider');
         const pipBtn = document.getElementById('pipBtn');
         const appContainer = document.getElementById('appContainer');
@@ -207,7 +206,6 @@
             initAudio();
             if (!audioCtx) return;
 
-            // Capture the real-time value from our user volume control slider
             const volumeLevel = parseFloat(volumeSlider.value);
 
             function createTone(freq, type, duration, delay = 0) {
@@ -220,7 +218,6 @@
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
                 
-                // Multiplied baseline maximum with slider value
                 gain.gain.setValueAtTime(volumeLevel, audioCtx.currentTime + delay);
                 gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
                 
@@ -253,7 +250,6 @@
             const fullTitle = `(${timeString}) ${statusLabel}`;
             
             document.title = fullTitle;
-            // Also maintain title context update inside floating window frame if open
             if (pipWindow) {
                 pipWindow.document.title = fullTitle;
             }
@@ -297,5 +293,13 @@
                             timerCircle.className = 'timer-circle work-mode';
                             playNotificationSound(false);
                             updateDisplay();
-</body>
-</html>
+                            pauseTimerUI('Resume Focus');
+                        }
+                    } else {
+                        if (isBreak) {
+                            modeStatus.textContent = 'Look Away!';
+                        } else {
+                            modeStatus.textContent = 'Focus';
+                        }
+                        updateDisplay();
+                    }
