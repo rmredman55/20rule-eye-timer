@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>20/20/20 Eye Strain Timer</title>
-    <style>
+    <style id="mainStyles">
         :root {
             --bg-color: #0f172a;
             --card-bg: #1e293b;
@@ -33,6 +33,7 @@
             text-align: center;
             max-width: 400px;
             width: 100%;
+            box-sizing: border-box;
         }
 
         h1 {
@@ -43,14 +44,14 @@
         .subtitle {
             color: var(--text-muted);
             font-size: 0.95rem;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
         }
 
         .timer-circle {
             position: relative;
             width: 220px;
             height: 220px;
-            margin: 0 auto 2rem auto;
+            margin: 0 auto 1.5rem auto;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -82,15 +83,34 @@
             margin-top: 0.25rem;
         }
 
+        /* Volume controls styling */
+        .volume-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .volume-slider {
+            width: 100px;
+            accent-color: var(--work-color);
+            cursor: pointer;
+        }
+
         .btn-group {
             display: flex;
-            gap: 1rem;
+            gap: 0.75rem;
             justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 0.75rem;
         }
 
         button {
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.95rem;
             font-weight: 600;
             border: none;
             border-radius: 12px;
@@ -105,12 +125,18 @@
         .btn-primary {
             background-color: #f1f5f9;
             color: #0f172a;
-            width: 140px;
+            min-width: 130px;
         }
 
         .btn-secondary {
             background-color: #334155;
             color: var(--text-main);
+        }
+
+        .btn-pip {
+            background-color: #475569;
+            color: #fff;
+            width: 100%;
         }
 
         button:disabled {
@@ -121,7 +147,8 @@
 </head>
 <body>
 
-    <div class="container">
+    <!-- Target wrapper container to allow moving it between main window and floating PiP window -->
+    <div id="appContainer" class="container">
         <h1>20/20/20 Timer</h1>
         <div class="subtitle">Protect your eyes from digital strain</div>
 
@@ -130,11 +157,20 @@
             <div id="modeStatus" class="mode-status" style="color: var(--work-color);">Focus</div>
         </div>
 
+        <!-- Volume Control Slider Component -->
+        <div class="volume-container">
+            <span>🔈</span>
+            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.05" value="0.6">
+            <span>🔊</span>
+        </div>
+
         <div class="btn-group">
             <button id="startBtn" class="btn-primary" onclick="toggleTimer()">Start</button>
             <button id="resetBtn" class="btn-secondary" onclick="resetTimer()">Reset</button>
-            <button id="testAudioBtn" class="btn-secondary" onclick="playTestSound()">🎵 Test Sound</button>
+            <button id="testAudioBtn" class="btn-secondary" onclick="playTestSound()">🎵 Test</button>
         </div>
+        
+        <button id="pipBtn" class="btn-pip" onclick="togglePipWindow()">📺 Pop Out Window</button>
     </div>
 
     <script>
@@ -146,11 +182,20 @@
         let isRunning = false;
         let timerId = null;
         let audioCtx = null;
+        let pipWindow = null;
 
         const timeDisplay = document.getElementById('timeDisplay');
         const modeStatus = document.getElementById('modeStatus');
         const timerCircle = document.getElementById('timerCircle');
         const startBtn = document.getElementById('startBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const pipBtn = document.getElementById('pipBtn');
+        const appContainer = document.getElementById('appContainer');
+
+        // Hide Pop out button entirely if the browser doesn't support Document PiP API yet
+        if (!('documentPictureInPicture' in window)) {
+            pipBtn.style.display = 'none';
+        }
 
         function initAudio() {
             if (!audioCtx) {
@@ -162,7 +207,9 @@
             initAudio();
             if (!audioCtx) return;
 
-            // Helper function to create a beefier, multi-layered oscillator sound
+            // Capture the real-time value from our user volume control slider
+            const volumeLevel = parseFloat(volumeSlider.value);
+
             function createTone(freq, type, duration, delay = 0) {
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
@@ -173,8 +220,8 @@
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
                 
-                // Significantly bumped gain up to 0.6 for maximum audible presence without distortion
-                gain.gain.setValueAtTime(0.6, audioCtx.currentTime + delay);
+                // Multiplied baseline maximum with slider value
+                gain.gain.setValueAtTime(volumeLevel, audioCtx.currentTime + delay);
                 gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
                 
                 osc.start(audioCtx.currentTime + delay);
@@ -182,11 +229,9 @@
             }
 
             if (isBreakStart) {
-                // Energetic bright dual-tone chime for breaking away
                 createTone(880, 'sine', 0.5);
                 createTone(1320, 'sine', 0.5, 0.08); 
             } else {
-                // Deep, clear chime for returning to work
                 createTone(523.25, 'triangle', 0.6);
                 createTone(659.25, 'sine', 0.6, 0.05);
             }
@@ -200,10 +245,18 @@
         function updateDisplay() {
             const minutes = Math.floor(timeLeft / 60);
             const seconds = timeLeft % 60;
-            timeDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            const timeString = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            
+            timeDisplay.textContent = timeString;
             
             const statusLabel = isBreak ? "BREAK!" : "Focus";
-            document.title = `(${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}) ${statusLabel}`;
+            const fullTitle = `(${timeString}) ${statusLabel}`;
+            
+            document.title = fullTitle;
+            // Also maintain title context update inside floating window frame if open
+            if (pipWindow) {
+                pipWindow.document.title = fullTitle;
+            }
         }
 
         function pauseTimerUI(nextLabel) {
@@ -244,36 +297,5 @@
                             timerCircle.className = 'timer-circle work-mode';
                             playNotificationSound(false);
                             updateDisplay();
-                            pauseTimerUI('Resume Focus');
-                        }
-                    } else {
-                        // Regular label updates during active countdowns
-                        if (isBreak) {
-                            modeStatus.textContent = 'Look Away!';
-                        } else {
-                            modeStatus.textContent = 'Focus';
-                        }
-                        updateDisplay();
-                    }
-                }, 1000);
-            }
-        }
-
-        function resetTimer() {
-            clearInterval(timerId);
-            isRunning = false;
-            isBreak = false;
-            timeLeft = WORK_TIME;
-            startBtn.textContent = 'Start';
-            startBtn.style.backgroundColor = '#f1f5f9';
-            startBtn.style.color = '#0f172a';
-            modeStatus.textContent = 'Focus';
-            modeStatus.style.color = 'var(--work-color)';
-            timerCircle.className = 'timer-circle work-mode';
-            updateDisplay();
-        }
-    </script>
-</body>
-</html>
 </body>
 </html>
