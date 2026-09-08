@@ -66,7 +66,7 @@
         }
 
         .timer-circle.break-mode {
-            border-color: var(--break-color);
+(--break-color);
         }
 
         .time-display {
@@ -191,7 +191,6 @@
         const pipBtn = document.getElementById('pipBtn');
         const appContainer = document.getElementById('appContainer');
 
-        // Hide Pop out button entirely if the browser doesn't support Document PiP API yet
         if (!('documentPictureInPicture' in window)) {
             pipBtn.style.display = 'none';
         }
@@ -263,6 +262,7 @@
             startBtn.style.color = '#0f172a';
         }
 
+        /* --- THIS WAS THE MISSING PART THAT WAS OUTSIDE --- */
         function toggleTimer() {
             initAudio();
             if (isRunning) {
@@ -303,3 +303,6 @@
                         }
                         updateDisplay();
                     }
+                }, 1000);
+            }
+        }
