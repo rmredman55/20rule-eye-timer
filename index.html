@@ -12,6 +12,7 @@
             --text-muted: #94a3b8;
             --work-color: #3b82f6;
             --break-color: #10b981;
+            --delay-color: #f59e0b;
         }
 
         body {
@@ -59,6 +60,10 @@
             border-radius: 50%;
             border: 8px solid #334155;
             transition: border-color 0.5s ease;
+        }
+
+        .timer-circle.delay-mode {
+            border-color: var(--delay-color);
         }
 
         .timer-circle.work-mode {
@@ -120,20 +125,9 @@
             transform: scale(0.98);
         }
 
-        .btn-primary {
-            background-color: #f1f5f9;
-            color: #0f172a;
-            min-width: 130px;
-        }
-
         .btn-secondary {
             background-color: #334155;
             color: var(--text-main);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
         }
     </style>
 </head>
@@ -143,9 +137,9 @@
         <h1>20/20/20 Timer</h1>
         <div class="subtitle">Protect your eyes from digital strain</div>
 
-        <div id="timerCircle" class="timer-circle work-mode">
-            <div id="timeDisplay" class="time-display">20:00</div>
-            <div id="modeStatus" class="mode-status" style="color: var(--work-color);">Focus</div>
+        <div id="timerCircle" class="timer-circle delay-mode">
+            <div id="timeDisplay" class="time-display">00:15</div>
+            <div id="modeStatus" class="mode-status" style="color: var(--delay-color);">Starting...</div>
         </div>
 
         <div class="volume-container">
@@ -155,26 +149,24 @@
         </div>
 
         <div class="btn-group">
-            <button id="startBtn" class="btn-primary" onclick="toggleTimer()">Start</button>
-            <button id="resetBtn" class="btn-secondary" onclick="resetTimer()">Reset</button>
-            <button id="testAudioBtn" class="btn-secondary" onclick="playTestSound()">🎵 Test</button>
+            <button id="testAudioBtn" class="btn-secondary" onclick="playTestSound()">🎵 Test Ring</button>
         </div>
     </div>
 
     <script>
+        const START_DELAY = 15;
         const WORK_TIME = 20 * 60; 
         const BREAK_TIME = 20;     
         
-        let timeLeft = WORK_TIME;
+        let timeLeft = START_DELAY;
         let isBreak = false;
-        let isRunning = false;
+        let isDelayMode = true;
         let timerId = null;
         let audioCtx = null;
 
         const timeDisplay = document.getElementById('timeDisplay');
         const modeStatus = document.getElementById('modeStatus');
         const timerCircle = document.getElementById('timerCircle');
-        const startBtn = document.getElementById('startBtn');
         const volumeSlider = document.getElementById('volumeSlider');
 
         function initAudio() {
@@ -183,41 +175,47 @@
             }
         }
 
-        function playNotificationSound(isBreakStart) {
+        // Simulates an old school high-pitched alarm bell ringing sound
+        function playNotificationSound() {
             initAudio();
             if (!audioCtx) return;
 
             const volumeLevel = parseFloat(volumeSlider.value);
+            const now = audioCtx.currentTime;
 
-            function createTone(freq, type, duration, delay = 0) {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
+            // Generate rapid rapid strikes of an alarm bell
+            for (let i = 0; i < 8; i++) {
+                const strikeTime = now + (i * 0.15);
                 
-                osc.type = type;
-                osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
-                
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                
-                gain.gain.setValueAtTime(volumeLevel, audioCtx.currentTime + delay);
-                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
-                
-                osc.start(audioCtx.currentTime + delay);
-                osc.stop(audioCtx.currentTime + delay + duration);
+                // Primary high-pitch metallic frequency
+                createRingTone(1800, strikeTime, 0.2, volumeLevel);
+                // Lower metallic resonance frequency
+                createRingTone(1500, strikeTime, 0.2, volumeLevel * 0.7);
             }
+        }
 
-            if (isBreakStart) {
-                createTone(880, 'sine', 0.5);
-                createTone(1320, 'sine', 0.5, 0.08); 
-            } else {
-                createTone(523.25, 'triangle', 0.6);
-                createTone(659.25, 'sine', 0.6, 0.05);
-            }
+        function createRingTone(freq, startTime, duration, baseVolume) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            // Sine combined with high frequency creates a bright, piercing ringing sound
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, startTime);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(baseVolume, startTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            
+            osc.start(startTime);
+            osc.stop(startTime + duration);
         }
 
         function playTestSound() {
             initAudio();
-            playNotificationSound(true);
+            playNotificationSound();
         }
 
         function updateDisplay() {
@@ -227,75 +225,59 @@
             
             timeDisplay.textContent = timeString;
             
-            const statusLabel = isBreak ? "BREAK!" : "Focus";
+            let statusLabel = "Starting...";
+            if (!isDelayMode) {
+                statusLabel = isBreak ? "BREAK!" : "Focus";
+            }
             document.title = `(${timeString}) ${statusLabel}`;
         }
 
-        function pauseTimerUI(nextLabel) {
-            clearInterval(timerId);
-            isRunning = false;
-            startBtn.textContent = nextLabel;
-            startBtn.style.backgroundColor = '#f1f5f9';
-            startBtn.style.color = '#0f172a';
-        }
+        function startTimerLoop() {
+            timerId = setInterval(() => {
+                timeLeft--;
 
-        function toggleTimer() {
-            initAudio();
-            if (isRunning) {
-                pauseTimerUI(isBreak ? 'Start Break' : 'Resume');
-            } else {
-                isRunning = true;
-                startBtn.textContent = 'Pause';
-                startBtn.style.backgroundColor = '#f43f5e'; 
-                startBtn.style.color = '#fff';
-                
-                timerId = setInterval(() => {
-                    timeLeft--;
-
-                    if (timeLeft < 0) {
+                if (timeLeft < 0) {
+                    if (isDelayMode) {
+                        // 15 Second delay finishes, move to Work session
+                        isDelayMode = false;
+                        isBreak = false;
+                        timeLeft = WORK_TIME;
+                        
+                        modeStatus.textContent = 'Focus';
+                        modeStatus.style.color = 'var(--work-color)';
+                        timerCircle.className = 'timer-circle work-mode';
+                        
+                        playNotificationSound();
+                    } else {
+                        // Switch between Focus and Break loops
                         isBreak = !isBreak;
                         if (isBreak) {
                             timeLeft = BREAK_TIME;
                             modeStatus.textContent = 'Ready for break?';
                             modeStatus.style.color = 'var(--break-color)';
                             timerCircle.className = 'timer-circle break-mode';
-                            playNotificationSound(true);
-                            updateDisplay();
-                            pauseTimerUI('Start Break');
                         } else {
                             timeLeft = WORK_TIME;
-                            modeStatus.textContent = 'Ready to focus?';
+                            modeStatus.textContent = 'Focus';
                             modeStatus.style.color = 'var(--work-color)';
                             timerCircle.className = 'timer-circle work-mode';
-                            playNotificationSound(false);
-                            updateDisplay();
-                            pauseTimerUI('Resume Focus');
                         }
-                    } else {
-                        if (isBreak) {
-                            modeStatus.textContent = 'Look Away!';
-                        } else {
-                            modeStatus.textContent = 'Focus';
-                        }
-                        updateDisplay();
+                        playNotificationSound();
                     }
-                }, 1000);
-            }
+                }
+                updateDisplay();
+            }, 1000);
         }
 
-        function resetTimer() {
-            clearInterval(timerId);
-            isRunning = false;
-            isBreak = false;
-            timeLeft = WORK_TIME;
-            startBtn.textContent = 'Start';
-            startBtn.style.backgroundColor = '#f1f5f9';
-            startBtn.style.color = '#0f172a';
-            modeStatus.textContent = 'Focus';
-            modeStatus.style.color = 'var(--work-color)';
-            timerCircle.className = 'timer-circle work-mode';
+        // Auto-initialize layout and begin countdown seamlessly on window mount
+        window.addEventListener('DOMContentLoaded', () => {
             updateDisplay();
-        }
+            startTimerLoop();
+            
+            // Audio context can only fully initialize on user gesture, 
+            // so we listen to any click inside the document to prime it.
+            document.body.addEventListener('click', initAudio, { once: true });
+        });
     </script>
 </body>
 </html>
